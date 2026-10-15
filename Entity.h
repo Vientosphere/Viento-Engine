@@ -2,38 +2,35 @@
 
 #include "raylib.h"
 
-// 3D uzaydaki bir nesneyi temsil eden temel yapı
-struct Entity {
-    Vector3 pozisyon; // Konum (X, Y, Z)
-    Vector3 boyut;    // Boyut (Genişlik, Yükseklik, Derinlik)
-    Color renk;       // Gövde rengi
-    Color cizgiRengi; // Kenar çizgisi rengi
-    bool cizgiler;    // Kenar çizgileri çizilsin mi?
+#include <algorithm>
+#include <cmath>
 
-    // Nesnenin sınırlayıcı kutusu (Bounding Box - Tıklama ve seçim için)
+// A simple scene object with safe defaults. Dimensions are full extents.
+struct Entity {
+    Vector3 pozisyon{ 0.0f, 0.0f, 0.0f };
+    Vector3 boyut{ 1.0f, 1.0f, 1.0f };
+    Color renk{ 140, 145, 155, 255 };
+    Color cizgiRengi{ 230, 235, 245, 255 };
+    bool cizgiler = false;
+
     BoundingBox GetBoundingBox() const {
-        Vector3 min = {
-            pozisyon.x - boyut.x / 2.0f,
-            pozisyon.y - boyut.y / 2.0f,
-            pozisyon.z - boyut.z / 2.0f
+        const Vector3 half = {
+            std::fabs(boyut.x) * 0.5f,
+            std::fabs(boyut.y) * 0.5f,
+            std::fabs(boyut.z) * 0.5f
         };
-        Vector3 max = {
-            pozisyon.x + boyut.x / 2.0f,
-            pozisyon.y + boyut.y / 2.0f,
-            pozisyon.z + boyut.z / 2.0f
+        return {
+            { pozisyon.x - half.x, pozisyon.y - half.y, pozisyon.z - half.z },
+            { pozisyon.x + half.x, pozisyon.y + half.y, pozisyon.z + half.z }
         };
-        return { min, max };
     }
 
-    // Nesneyi 3D uzayda çizen fonksiyon
     void Ciz(bool seciliMi = false) const {
-        DrawCube(pozisyon, boyut.x, boyut.y, boyut.z, renk);
-        
+        DrawCube(pozisyon, std::fabs(boyut.x), std::fabs(boyut.y), std::fabs(boyut.z), renk);
         if (seciliMi) {
-            // Seçili nesneye parlak turuncu/sarı kenarlık çizgisi
-            DrawCubeWires(pozisyon, boyut.x, boyut.y, boyut.z, ORANGE);
+            DrawCubeWires(pozisyon, std::fabs(boyut.x), std::fabs(boyut.y), std::fabs(boyut.z), ORANGE);
         } else if (cizgiler) {
-            DrawCubeWires(pozisyon, boyut.x, boyut.y, boyut.z, cizgiRengi);
+            DrawCubeWires(pozisyon, std::fabs(boyut.x), std::fabs(boyut.y), std::fabs(boyut.z), cizgiRengi);
         }
     }
 };
