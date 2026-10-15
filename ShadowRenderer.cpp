@@ -190,7 +190,11 @@ void ShadowRenderer::RenderShadowMap(const std::vector<Entity>& entities) {
         center = Vector3Scale(Vector3Add(minBounds, maxBounds), 0.5f);
         const Vector3 span = Vector3Subtract(maxBounds, minBounds);
         extent = std::max(8.0f, std::max(span.x, std::max(span.y, span.z))*0.75f + 4.0f);
+        groundY = minBounds.y - 0.05f;
     }
+
+    groundCenter = center;
+    groundExtent = extent*1.35f;
 
     lightCamera = {};
     lightCamera.position = Vector3Subtract(center, Vector3Scale(lightDirection, extent*2.0f));
@@ -205,6 +209,9 @@ void ShadowRenderer::RenderShadowMap(const std::vector<Entity>& entities) {
     BeginMode3D(lightCamera);
         lightView = rlGetMatrixModelview();
         lightProjection = rlGetMatrixProjection();
+        DrawModelEx(cubeModel, { groundCenter.x, groundY - 0.05f, groundCenter.z },
+                    { 0.0f, 1.0f, 0.0f }, 0.0f,
+                    { groundExtent*2.0f, 0.1f, groundExtent*2.0f }, WHITE);
         for (const Entity& entity : entities) {
             const Vector3 scale = {
                 std::max(0.001f, std::fabs(entity.boyut.x)),
@@ -227,6 +234,13 @@ void ShadowRenderer::BeginMainPass(const Camera3D& camera) {
     rlActiveTextureSlot(kShadowTextureSlot);
     rlEnableTexture(shadowMap.depth.id);
     rlSetUniform(shadowMapLocation, &kShadowTextureSlot, SHADER_UNIFORM_INT, 1);
+}
+
+void ShadowRenderer::DrawGround() const {
+    if (!ready) return;
+    DrawModelEx(cubeModel, { groundCenter.x, groundY - 0.05f, groundCenter.z },
+                { 0.0f, 1.0f, 0.0f }, 0.0f,
+                { groundExtent*2.0f, 0.1f, groundExtent*2.0f }, { 75, 79, 88, 255 });
 }
 
 void ShadowRenderer::DrawEntity(const Entity& entity) const {
