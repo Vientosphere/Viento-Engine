@@ -22,6 +22,7 @@ public:
     void AdjustLight(Vector2 delta);
     void RenderShadowMap(const std::vector<Entity>& entities);
     void BeginMainPass(const Camera3D& camera);
+    void DrawGround() const;
     void DrawEntity(const Entity& entity) const;
     void EndMainPass();
 
@@ -38,6 +39,9 @@ private:
     Matrix lightProjection{};
     Matrix lightViewProjection{};
     Vector3 lightDirection{ 0.45f, -1.0f, 0.35f };
+    Vector3 groundCenter{};
+    float groundY = -0.05f;
+    float groundExtent = 20.0f;
     int lightDirectionLocation = -1;
     int lightColorLocation = -1;
     int ambientLocation = -1;
