@@ -28,6 +28,7 @@ target_link_libraries(viento_core PUBLIC raylib)
 add_executable(viento_engine
     main.cpp
     Engine.cpp
+    ShadowRenderer.cpp
 )
 target_link_libraries(viento_engine PRIVATE viento_core raylib)
 
