@@ -1,44 +1,39 @@
 # 🌪️ Viento Engine
 
-**Viento Engine**, C++ dili ile geliştirilen, hafif ve modüler bir 2D/3D oyun motoru projesidir.
+Viento Engine, C++17 ve Raylib ile geliştirilen hafif bir 3D viewport / oyun motoru prototipidir.
 
----
+## Mevcut özellikler
 
-## 📌 Genel Bakış & Hedefler
+- Raylib tabanlı 3D viewport, ızgara ve yön pusulası
+- Sağ fare tuşuyla serbest kamera; WASD ve Q/E hareketi
+- Fare tekerleğiyle kamera hızı, `[` ve `]` ile FOV ayarı
+- Ray üzerinden en yakın nesneyi seçme ve seçim gizmosu
+- Kamera denetimi ve sahne/seçim kodu ayrı bileşenlerde
+- Güvenli Entity varsayılanları ve idempotent pencere kapatma
 
-Projenin temel amacı; karmaşık ve ağır oyun motorlarının getirdiği yüklerden uzak, doğrudan bellek ve donanım kontrolünü temel alan sade bir motor mimarisi oluşturmaktır.
+## Gereksinimler
 
-* **Render:** 2D ve 3D çizim işlemleri için **Raylib** kütüphanesi kullanılmaktadır.
-* **Fizik:** 3D uzayda katı cisim (rigid body) ve çarpışma simülasyonları için **Bullet3 Physics** entegrasyonu hedeflenmektedir.
-* **Dil & Standart:** C++ (MinGW-w64 derleyici altyapısı).
+- CMake 3.20+
+- C++17 destekli derleyici (GCC/Clang/MSVC)
+- Git (CMake, Raylib 5.5 kaynağını `FetchContent` ile indirir)
+- Linux'ta Raylib için OpenGL/X11 ve ALSA geliştirme paketleri
 
----
+## Derleme
 
-## ⚙️ Mevcut Özellikler (v0.03)
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --parallel
+ctest --test-dir build --output-on-failure
+```
 
-- [x] **Çekirdek Motor Mimarisi:** `Engine` sınıfı ve yaşam döngüsü (`Init`, `Update`, `Render`, `Shutdown`).
-- [x] **Varlık (Entity) Sistemi:** Sahneye dinamik olarak nesne (`Entity`) ekleme ve toplu çizim döngüsü.
-- [x] **3D Perspektif Kamera:** 3D uzay ve derinlik hesaplamaları.
-- [x] **Girdi Yönetimi:** Klavye ile nesne hareketi (X, Y, Z eksenleri) ve anlık renk yönetimi.
+Windows üzerinde de CMake ve uygun C++ derleyicisiyle aynı komutlar kullanılabilir. İlk yapılandırmada Raylib kaynakları indirilir; çevrimdışı derleme için bağımlılığı önceden sağlayıp CMake yapılandırmasını buna göre uyarlayın.
 
----
+## Testler
 
-## 🗺️ Planlanan Geliştirmeler (Roadmap)
+`viento_core_tests`, Entity sınır kutularını ve varsayılanlarını, kamera yönü ve limitlerini, sahne seçimi/temizleme davranışını kontrol eder. GitHub Actions her push ve pull request'te derleme ve test çalıştırır.
 
-- [x] **Serbest 3D Kamera (Free-Fly Camera):** Editör içinde serbest dolaşım.
-- [ ] **Transform & Hiyerarşi:** Nesnelerin dönüş açıları (Rotation / Yaw-Pitch-Roll).
-- [ ] **Bullet3 Entegrasyonu:** Yerçekimi, kütle ve katı cisim çarpışma hesaplamaları.
+## Yol haritası
 
----
-
-## 🚀 Derleme & Çalıştırma
-
-Projeyi Windows üzerinde derlemek ve çalıştırmak için:
-
-1. `C:\raylib` (w64devkit) kurulu olmalıdır.
-2. `Derle_Ve_Baslat.bat` dosyası çalıştırılarak otomatik derleme (`g++`) ve başlatma sağlanır.
-
----
-
-## 👤 Geliştirici
-* **Engin Yılmaz (Viento)**
+- [ ] Transform ve nesne hiyerarşisi
+- [ ] Bullet3 fizik entegrasyonu
+- [ ] Daha kapsamlı giriş ve viewport testleri
