@@ -3,6 +3,7 @@
 #include "raylib.h"
 
 #include <algorithm>
+#include <cmath>
 
 // A simple scene object with safe defaults. Dimensions are full extents.
 struct Entity {
