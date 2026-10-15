@@ -1,18 +1,10 @@
 #include "Engine.h"
 #include "raymath.h"
 
-Engine::Engine()
-    : ekranGenisligi(1280), ekranYuksekligi(720), calisiyorMu(false),
-      kameraHizi(10.0f), kameraYaw(45.0f), kameraPitch(-30.0f),
-      seciliNesneIndeksi(-1) {
+#include <algorithm>
 
-    // Varsayılan FOV 70 ile perspektif kamera
-    kamera = { 0 };
-    kamera.position = (Vector3){ 7.0f, 6.0f, 7.0f };
-    kamera.target = (Vector3){ 0.0f, 0.0f, 0.0f };
-    kamera.up = (Vector3){ 0.0f, 1.0f, 0.0f };
-    kamera.fovy = 70.0f;
-    kamera.projection = CAMERA_PERSPECTIVE;
+namespace {
+constexpr float kMoveUnitsPerSecond = 1.0f;
 }
 
 Engine::~Engine() {
@@ -20,222 +12,150 @@ Engine::~Engine() {
 }
 
 void Engine::Init(int genislik, int yukseklik, const char* baslik) {
+    if (pencereHazir || genislik <= 0 || yukseklik <= 0) return;
+
     ekranGenisligi = genislik;
     ekranYuksekligi = yukseklik;
-
     InitWindow(ekranGenisligi, ekranYuksekligi, baslik);
+    pencereHazir = IsWindowReady();
+    if (!pencereHazir) return;
+
     SetTargetFPS(60);
     calisiyorMu = true;
 }
 
 void Engine::Shutdown() {
-    if (calisiyorMu) {
+    // Window lifetime is independent of the run-loop flag. ESC can stop the
+    // loop before the window is closed; this remains safe when called twice.
+    calisiyorMu = false;
+    if (pencereHazir) {
+        if (IsCursorHidden()) EnableCursor();
         CloseWindow();
-        calisiyorMu = false;
+        pencereHazir = false;
     }
 }
 
 void Engine::NesneEkle(const Entity& yeniNesne) {
-    nesneler.push_back(yeniNesne);
+    sahne.Add(yeniNesne);
 }
 
 void Engine::Run() {
+    if (!pencereHazir) return;
     while (calisiyorMu && !WindowShouldClose()) {
         Update();
-        Render();
+        if (calisiyorMu) Render();
     }
+    Shutdown();
 }
 
 void Engine::Update() {
-    float dt = GetFrameTime();
+    const float dt = GetFrameTime();
 
-    // 1. Mouse Tekerleği ile Unreal Engine tarzı kamera hızını değiştirme
-    float tekerlek = GetMouseWheelMove();
-    if (tekerlek != 0.0f) {
-        kameraHizi += tekerlek * 2.5f;
-        if (kameraHizi < 1.0f) kameraHizi = 1.0f;
-        if (kameraHizi > 50.0f) kameraHizi = 50.0f;
-    }
+    kameraKontrol.AdjustSpeed(GetMouseWheelMove());
+    if (IsKeyDown(KEY_LEFT_BRACKET)) kameraKontrol.AdjustFov(-20.0f * dt);
+    if (IsKeyDown(KEY_RIGHT_BRACKET)) kameraKontrol.AdjustFov(20.0f * dt);
 
-    // 2. FOV Ayarı (Klavyede [ ve ] tuşları ile FOV açısını daralt/genişlet)
-    if (IsKeyDown(KEY_LEFT_BRACKET) && kamera.fovy > 30.0f)  kamera.fovy -= 20.0f * dt;
-    if (IsKeyDown(KEY_RIGHT_BRACKET) && kamera.fovy < 110.0f) kamera.fovy += 20.0f * dt;
-
-    // 3. Unreal Tarzı Kamera Hareketi (Sağ tık basılı tutulurken)
-    if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
-        DisableCursor(); // Sadece sağ tıka basıldığı ilk an kilitle
-    }
+    if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) DisableCursor();
 
     if (IsMouseButtonDown(MOUSE_BUTTON_RIGHT)) {
-        Vector2 mouseDelta = GetMouseDelta();
-        kameraYaw   += mouseDelta.x * 0.15f;
-        kameraPitch -= mouseDelta.y * 0.15f;
-
-        // Kameranın ters takla atmasını engelle
-        if (kameraPitch > 89.0f)  kameraPitch = 89.0f;
-        if (kameraPitch < -89.0f) kameraPitch = -89.0f;
-
-        // Açıları radyana çevir ve ileri/sağ vektörlerini hesapla
-        float yawRad   = kameraYaw * DEG2RAD;
-        float pitchRad = kameraPitch * DEG2RAD;
-
-        Vector3 ileri = {
-            cosf(pitchRad) * sinf(yawRad),
-            sinf(pitchRad),
-            cosf(pitchRad) * cosf(yawRad)
-        };
-        ileri = Vector3Normalize(ileri);
-
-        Vector3 sag = Vector3Normalize(Vector3CrossProduct(ileri, (Vector3){ 0.0f, 1.0f, 0.0f }));
-        Vector3 yukari = { 0.0f, 1.0f, 0.0f };
-
-        // WASD + Q/E Tuşları ile hareket
-        float anlikHiz = kameraHizi * dt;
-        if (IsKeyDown(KEY_W)) kamera.position = Vector3Add(kamera.position, Vector3Scale(ileri, anlikHiz));
-        if (IsKeyDown(KEY_S)) kamera.position = Vector3Subtract(kamera.position, Vector3Scale(ileri, anlikHiz));
-        if (IsKeyDown(KEY_D)) kamera.position = Vector3Add(kamera.position, Vector3Scale(sag, anlikHiz));
-        if (IsKeyDown(KEY_A)) kamera.position = Vector3Subtract(kamera.position, Vector3Scale(sag, anlikHiz));
-        if (IsKeyDown(KEY_E)) kamera.position = Vector3Add(kamera.position, Vector3Scale(yukari, anlikHiz)); // Yukarı çık
-        if (IsKeyDown(KEY_Q)) kamera.position = Vector3Subtract(kamera.position, Vector3Scale(yukari, anlikHiz)); // Aşağı in
-
-        // Hedefi güncelle
-        kamera.target = Vector3Add(kamera.position, ileri);
+        kameraKontrol.Rotate(GetMouseDelta());
+        const float distance = kameraKontrol.GetSpeed() * dt * kMoveUnitsPerSecond;
+        if (IsKeyDown(KEY_W)) kameraKontrol.MoveForward(distance);
+        if (IsKeyDown(KEY_S)) kameraKontrol.MoveForward(-distance);
+        if (IsKeyDown(KEY_D)) kameraKontrol.MoveRight(distance);
+        if (IsKeyDown(KEY_A)) kameraKontrol.MoveRight(-distance);
+        if (IsKeyDown(KEY_E)) kameraKontrol.MoveVertical(distance);
+        if (IsKeyDown(KEY_Q)) kameraKontrol.MoveVertical(-distance);
     }
 
-    if (IsMouseButtonReleased(MOUSE_BUTTON_RIGHT)) {
-        EnableCursor(); // Sağ tık bırakıldığı an fareyi serbest bırak
+    if (IsMouseButtonReleased(MOUSE_BUTTON_RIGHT)) EnableCursor();
+
+    if (!IsMouseButtonDown(MOUSE_BUTTON_RIGHT) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        sahne.Select(GetMouseRay(GetMousePosition(), kameraKontrol.GetCamera()));
     }
 
-    // 4. Normal Fare Modu (Sağ tık basılı değilken nesne seçme)
-    if (!IsMouseButtonDown(MOUSE_BUTTON_RIGHT)) {
-        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-            Ray ray = GetMouseRay(GetMousePosition(), kamera);
-            seciliNesneIndeksi = -1;
-            float enYakinMesafe = 999999.0f;
-
-            for (int i = 0; i < static_cast<int>(nesneler.size()); i++) {
-                RayCollision carpi = GetRayCollisionBox(ray, nesneler[i].GetBoundingBox());
-                if (carpi.hit && carpi.distance < enYakinMesafe) {
-                    enYakinMesafe = carpi.distance;
-                    seciliNesneIndeksi = i;
-                }
-            }
-        }
-    }
-
-    // Seçimi iptal et (ESC veya boşluğa tıklama)
     if (IsKeyPressed(KEY_ESCAPE)) {
-        if (seciliNesneIndeksi != -1) {
-            seciliNesneIndeksi = -1;
-        } else {
-            calisiyorMu = false;
-        }
+        if (sahne.GetSelectedIndex() != -1) sahne.ClearSelection();
+        else calisiyorMu = false;
     }
 }
 
 void Engine::CizSagAltGizmo() {
-    // Sağ altta 3D Yön Pusulası (Kameranın açısına göre dönen RGB koordinat eksenleri)
-    Vector3 kameraYonu = Vector3Normalize(Vector3Subtract(kamera.target, kamera.position));
-    
-    // Sağ alt köşede küçük bir kamera oluştur
+    const Camera3D& camera = kameraKontrol.GetCamera();
+    const Vector3 cameraDirection = Vector3Normalize(Vector3Subtract(camera.target, camera.position));
+
     Camera3D gizmoKamera = { 0 };
-    gizmoKamera.position = Vector3Scale(kameraYonu, -3.5f); // Merkeze aynı açıdan bakan mini kamera
-    gizmoKamera.target = (Vector3){ 0.0f, 0.0f, 0.0f };
-    gizmoKamera.up = (Vector3){ 0.0f, 1.0f, 0.0f };
+    gizmoKamera.position = Vector3Scale(cameraDirection, -3.5f);
+    gizmoKamera.target = { 0.0f, 0.0f, 0.0f };
+    gizmoKamera.up = { 0.0f, 1.0f, 0.0f };
     gizmoKamera.fovy = 50.0f;
     gizmoKamera.projection = CAMERA_PERSPECTIVE;
 
-    // Sağ alt 120x120 piksel alan
-    int gizmoBoyut = 120;
-    int gizmoX = ekranGenisligi - gizmoBoyut - 20;
-    int gizmoY = ekranYuksekligi - gizmoBoyut - 20;
+    constexpr int gizmoBoyut = 120;
+    const int gizmoX = ekranGenisligi - gizmoBoyut - 20;
+    const int gizmoY = ekranYuksekligi - gizmoBoyut - 20;
 
-    // Mini pusula arkaplanı
-    DrawRectangleRounded((Rectangle){ (float)gizmoX, (float)gizmoY, (float)gizmoBoyut, (float)gizmoBoyut }, 0.2f, 4, (Color){ 20, 22, 28, 200 });
-    DrawRectangleRoundedLines((Rectangle){ (float)gizmoX, (float)gizmoY, (float)gizmoBoyut, (float)gizmoBoyut }, 0.2f, 4, (Color){ 60, 65, 80, 255 });
+    DrawRectangleRounded({ (float)gizmoX, (float)gizmoY, (float)gizmoBoyut, (float)gizmoBoyut }, 0.2f, 4, { 20, 22, 28, 200 });
+    DrawRectangleRoundedLines({ (float)gizmoX, (float)gizmoY, (float)gizmoBoyut, (float)gizmoBoyut }, 0.2f, 4, { 60, 65, 80, 255 });
 
-    // Mini 3D çizim alanını kırp
     BeginScissorMode(gizmoX, gizmoY, gizmoBoyut, gizmoBoyut);
     BeginMode3D(gizmoKamera);
-
-        // X (Kırmızı), Y (Yeşil), Z (Mavi) Eksen Çizgileri
-        DrawLine3D((Vector3){ 0.0f, 0.0f, 0.0f }, (Vector3){ 1.0f, 0.0f, 0.0f }, RED);
-        DrawSphere((Vector3){ 1.0f, 0.0f, 0.0f }, 0.1f, RED);
-
-        DrawLine3D((Vector3){ 0.0f, 0.0f, 0.0f }, (Vector3){ 0.0f, 1.0f, 0.0f }, GREEN);
-        DrawSphere((Vector3){ 0.0f, 1.0f, 0.0f }, 0.1f, GREEN);
-
-        DrawLine3D((Vector3){ 0.0f, 0.0f, 0.0f }, (Vector3){ 0.0f, 0.0f, 1.0f }, BLUE);
-        DrawSphere((Vector3){ 0.0f, 0.0f, 1.0f }, 0.1f, BLUE);
-
-        // Merkez nokta
-        DrawSphere((Vector3){ 0.0f, 0.0f, 0.0f }, 0.06f, WHITE);
-
+        DrawLine3D({ 0, 0, 0 }, { 1, 0, 0 }, RED);
+        DrawSphere({ 1, 0, 0 }, 0.1f, RED);
+        DrawLine3D({ 0, 0, 0 }, { 0, 1, 0 }, GREEN);
+        DrawSphere({ 0, 1, 0 }, 0.1f, GREEN);
+        DrawLine3D({ 0, 0, 0 }, { 0, 0, 1 }, BLUE);
+        DrawSphere({ 0, 0, 1 }, 0.1f, BLUE);
+        DrawSphere({ 0, 0, 0 }, 0.06f, WHITE);
     EndMode3D();
     EndScissorMode();
 
-    // Eksen isimleri
     DrawText("X", gizmoX + gizmoBoyut - 20, gizmoY + gizmoBoyut / 2 - 5, 12, RED);
     DrawText("Y", gizmoX + gizmoBoyut / 2 - 4, gizmoY + 8, 12, GREEN);
     DrawText("Z", gizmoX + 12, gizmoY + gizmoBoyut - 20, 12, BLUE);
 }
 
 void Engine::Render() {
+    const Camera3D& camera = kameraKontrol.GetCamera();
+    const auto& entities = sahne.GetEntities();
+    const int selectedIndex = sahne.GetSelectedIndex();
+
     BeginDrawing();
-        // Blender tarzı koyu gri editör arkaplanı
-        ClearBackground((Color){ 30, 31, 36, 255 });
+    ClearBackground({ 30, 31, 36, 255 });
 
-        // --- 3D VIEWPORT BAŞLANGICI ---
-        BeginMode3D(kamera);
-
-            // 1. Zemin Izgarası (Grid)
-            DrawGrid(24, 1.0f);
-
-            // 2. Sahnedeki Varlıkları Çiz
-            for (int i = 0; i < static_cast<int>(nesneler.size()); i++) {
-                bool secili = (i == seciliNesneIndeksi);
-                nesneler[i].Ciz(secili);
-
-                // 3. Yalnızca obje seçiliyken üzerinde yerel 3D eksen çizgilerini (Gizmo) göster
-                if (secili) {
-                    Vector3 pos = nesneler[i].pozisyon;
-                    float gizmoUzunluk = 2.5f;
-
-                    // X Ekseni (Kırmızı)
-                    DrawLine3D(pos, (Vector3){ pos.x + gizmoUzunluk, pos.y, pos.z }, RED);
-                    DrawSphere((Vector3){ pos.x + gizmoUzunluk, pos.y, pos.z }, 0.15f, RED);
-
-                    // Y Ekseni (Yeşil)
-                    DrawLine3D(pos, (Vector3){ pos.x, pos.y + gizmoUzunluk, pos.z }, GREEN);
-                    DrawSphere((Vector3){ pos.x, pos.y + gizmoUzunluk, pos.z }, 0.15f, GREEN);
-
-                    // Z Ekseni (Mavi)
-                    DrawLine3D(pos, (Vector3){ pos.x, pos.y, pos.z + gizmoUzunluk }, BLUE);
-                    DrawSphere((Vector3){ pos.x, pos.y, pos.z + gizmoUzunluk }, 0.15f, BLUE);
-                }
+    BeginMode3D(camera);
+        DrawGrid(24, 1.0f);
+        for (std::size_t i = 0; i < entities.size(); ++i) {
+            const bool selected = static_cast<int>(i) == selectedIndex;
+            entities[i].Ciz(selected);
+            if (selected) {
+                const Vector3 pos = entities[i].pozisyon;
+                constexpr float axisLength = 2.5f;
+                DrawLine3D(pos, { pos.x + axisLength, pos.y, pos.z }, RED);
+                DrawSphere({ pos.x + axisLength, pos.y, pos.z }, 0.15f, RED);
+                DrawLine3D(pos, { pos.x, pos.y + axisLength, pos.z }, GREEN);
+                DrawSphere({ pos.x, pos.y + axisLength, pos.z }, 0.15f, GREEN);
+                DrawLine3D(pos, { pos.x, pos.y, pos.z + axisLength }, BLUE);
+                DrawSphere({ pos.x, pos.y, pos.z + axisLength }, 0.15f, BLUE);
             }
-
-        EndMode3D();
-        // --- 3D VIEWPORT BİTİŞİ ---
-
-        // Sol Üst: Motor Bilgileri (HUD)
-        DrawText("Viento Engine 3D - Viewport", 20, 20, 20, RAYWHITE);
-        DrawText("Fare Sol Tik: Obje Sec | Sag Tik + WASD/QE: Unreal Kamera", 20, 48, 14, LIGHTGRAY);
-        DrawText(TextFormat("Kamera Hizi: %.1fx (Tekerlek ile ayarla) | FOV: %.0f ([ / ] ile ayarla)", kameraHizi, kamera.fovy), 20, 70, 14, YELLOW);
-
-        // Sol Alt: Seçili Obje Bilgisi
-        if (seciliNesneIndeksi != -1) {
-            Vector3 pos = nesneler[seciliNesneIndeksi].pozisyon;
-            DrawText(TextFormat("Secili Obje #%i | Konum: (X: %.2f, Y: %.2f, Z: %.2f)", seciliNesneIndeksi, pos.x, pos.y, pos.z), 20, ekranYuksekligi - 40, 15, ORANGE);
-        } else {
-            DrawText("Secili Obje: Yok (Secmek icin 3D kupe sol tikla)", 20, ekranYuksekligi - 40, 14, DARKGRAY);
         }
+    EndMode3D();
 
-        // Sağ Alt: 3D Yön Pusulası (World Position Gizmo)
-        CizSagAltGizmo();
+    DrawText("Viento Engine 3D - Viewport", 20, 20, 20, RAYWHITE);
+    DrawText("Fare Sol Tik: Obje Sec | Sag Tik + WASD/QE: Unreal Kamera", 20, 48, 14, LIGHTGRAY);
+    DrawText(TextFormat("Kamera Hizi: %.1fx (Tekerlek ile ayarla) | FOV: %.0f ([ / ] ile ayarla)",
+                        kameraKontrol.GetSpeed(), camera.fovy), 20, 70, 14, YELLOW);
 
-        // Sağ Üst: FPS Göstergesi
-        DrawFPS(ekranGenisligi - 90, 20);
+    if (const Entity* selected = sahne.GetSelectedEntity()) {
+        const Vector3 pos = selected->pozisyon;
+        DrawText(TextFormat("Secili Obje #%i | Konum: (X: %.2f, Y: %.2f, Z: %.2f)",
+                            selectedIndex, pos.x, pos.y, pos.z),
+                 20, ekranYuksekligi - 40, 15, ORANGE);
+    } else {
+        DrawText("Secili Obje: Yok (Secmek icin 3D kupe sol tikla)", 20, ekranYuksekligi - 40, 14, DARKGRAY);
+    }
 
+    CizSagAltGizmo();
+    DrawFPS(ekranGenisligi - 90, 20);
     EndDrawing();
 }
