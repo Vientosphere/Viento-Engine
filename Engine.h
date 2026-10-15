@@ -2,6 +2,7 @@
 
 #include "CameraController.h"
 #include "Scene.h"
+#include "ShadowRenderer.h"
 
 class Engine {
 public:
@@ -28,4 +29,5 @@ private:
 
     CameraController kameraKontrol;
     Scene sahne;
+    ShadowRenderer shadowRenderer;
 };
