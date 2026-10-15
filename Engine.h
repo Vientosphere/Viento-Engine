@@ -26,6 +26,10 @@ private:
     int ekranYuksekligi = 720;
     bool calisiyorMu = false;
     bool pencereHazir = false;
+    bool nesneSurukleniyor = false;
+    Vector3 suruklemeBaslangicKonumu{};
+    Vector3 suruklemeBaslangicNoktasi{};
+    Vector3 suruklemeDuzlemiNormali{};
 
     CameraController kameraKontrol;
     Scene sahne;

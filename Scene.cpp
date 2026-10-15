@@ -13,6 +13,13 @@ const Entity* Scene::GetSelectedEntity() const {
     return &entities[static_cast<std::size_t>(selectedIndex)];
 }
 
+Entity* Scene::GetSelectedEntity() {
+    if (selectedIndex < 0 || selectedIndex >= static_cast<int>(entities.size())) {
+        return nullptr;
+    }
+    return &entities[static_cast<std::size_t>(selectedIndex)];
+}
+
 void Scene::ClearSelection() {
     selectedIndex = -1;
 }

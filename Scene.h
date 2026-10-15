@@ -9,6 +9,7 @@ public:
     void Add(const Entity& entity);
     const std::vector<Entity>& GetEntities() const { return entities; }
     int GetSelectedIndex() const { return selectedIndex; }
+    Entity* GetSelectedEntity();
     const Entity* GetSelectedEntity() const;
 
     void ClearSelection();

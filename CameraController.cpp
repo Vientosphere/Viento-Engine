@@ -41,7 +41,7 @@ void CameraController::SyncTarget() {
 }
 
 void CameraController::Rotate(Vector2 mouseDelta) {
-    yaw += mouseDelta.x * kMouseSensitivity;
+    yaw -= mouseDelta.x * kMouseSensitivity;
     pitch = std::clamp(pitch - mouseDelta.y * kMouseSensitivity, -kMaxPitch, kMaxPitch);
     // Keep yaw numerically bounded during long editing sessions.
     if (yaw > 180.0f || yaw < -180.0f) {

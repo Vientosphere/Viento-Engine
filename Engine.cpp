@@ -5,6 +5,17 @@
 
 namespace {
 constexpr float kMoveUnitsPerSecond = 1.0f;
+
+bool IntersectRayPlane(const Ray& ray, Vector3 planePoint, Vector3 planeNormal, Vector3* hitPoint) {
+    const float denominator = Vector3DotProduct(ray.direction, planeNormal);
+    if (std::fabs(denominator) < 0.0001f) return false;
+
+    const float distance = Vector3DotProduct(Vector3Subtract(planePoint, ray.position), planeNormal) / denominator;
+    if (distance < 0.0f) return false;
+
+    *hitPoint = Vector3Add(ray.position, Vector3Scale(ray.direction, distance));
+    return true;
+}
 }
 
 Engine::~Engine() {
@@ -65,7 +76,10 @@ void Engine::Update() {
     if (IsKeyDown(KEY_DOWN)) lightDelta.y += lightStep*dt;
     if (lightDelta.x != 0.0f || lightDelta.y != 0.0f) shadowRenderer.AdjustLight(lightDelta);
 
-    if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) DisableCursor();
+    if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
+        nesneSurukleniyor = false;
+        DisableCursor();
+    }
 
     if (IsMouseButtonDown(MOUSE_BUTTON_RIGHT)) {
         kameraKontrol.Rotate(GetMouseDelta());
@@ -81,8 +95,35 @@ void Engine::Update() {
     if (IsMouseButtonReleased(MOUSE_BUTTON_RIGHT)) EnableCursor();
 
     if (!IsMouseButtonDown(MOUSE_BUTTON_RIGHT) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-        sahne.Select(GetMouseRay(GetMousePosition(), kameraKontrol.GetCamera()));
+        const Ray mouseRay = GetMouseRay(GetMousePosition(), kameraKontrol.GetCamera());
+        sahne.Select(mouseRay);
+        nesneSurukleniyor = false;
+
+        if (Entity* selected = sahne.GetSelectedEntity()) {
+            const RayCollision collision = GetRayCollisionBox(mouseRay, selected->GetBoundingBox());
+            const Camera3D& camera = kameraKontrol.GetCamera();
+            const Vector3 cameraForward = Vector3Normalize(Vector3Subtract(camera.target, camera.position));
+            Vector3 dragPoint{};
+            if (collision.hit && IntersectRayPlane(mouseRay, selected->pozisyon, cameraForward, &dragPoint)) {
+                nesneSurukleniyor = true;
+                suruklemeBaslangicKonumu = selected->pozisyon;
+                suruklemeBaslangicNoktasi = dragPoint;
+                suruklemeDuzlemiNormali = cameraForward;
+            }
+        }
     }
+
+    if (IsMouseButtonDown(MOUSE_BUTTON_LEFT) && !IsMouseButtonDown(MOUSE_BUTTON_RIGHT) && nesneSurukleniyor) {
+        if (Entity* selected = sahne.GetSelectedEntity()) {
+            Vector3 currentPoint{};
+            const Ray mouseRay = GetMouseRay(GetMousePosition(), kameraKontrol.GetCamera());
+            if (IntersectRayPlane(mouseRay, suruklemeBaslangicKonumu, suruklemeDuzlemiNormali, &currentPoint)) {
+                selected->pozisyon = Vector3Add(suruklemeBaslangicKonumu,
+                                                Vector3Subtract(currentPoint, suruklemeBaslangicNoktasi));
+            }
+        }
+    }
+    if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) nesneSurukleniyor = false;
 
     if (IsKeyPressed(KEY_ESCAPE)) {
         if (sahne.GetSelectedIndex() != -1) sahne.ClearSelection();
@@ -175,7 +216,7 @@ void Engine::Render() {
     EndMode3D();
 
     DrawText("Viento Engine 3D - Viewport", 20, 20, 20, RAYWHITE);
-    DrawText("Sol tik: Obje sec | Sag tik + WASD/QE: Kamera | Ok tuslari: Isik yonu", 20, 48, 14, LIGHTGRAY);
+    DrawText("Sol tik: Obje sec/surukle | Sag tik + WASD/QE: Kamera | Ok tuslari: Isik yonu", 20, 48, 14, LIGHTGRAY);
     DrawText(TextFormat("Kamera Hizi: %.1fx | FOV: %.0f ([ / ] ile ayarla) | Golge: %s",
                         kameraKontrol.GetSpeed(), camera.fovy,
                         shadowRenderer.IsReady() ? "Acik" : "Kapali (shader/FBO)"), 20, 70, 14, YELLOW);
