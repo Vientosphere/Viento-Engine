@@ -5,10 +5,12 @@ Viento Engine, C++17 ve Raylib ile geliştirilen hafif bir 3D viewport / oyun mo
 ## Mevcut özellikler
 
 - Raylib tabanlı 3D viewport, ızgara ve yön pusulası
+- Raylib `rlgl` depth-texture + GLSL shadow mapping; sahne nesneleri birbirine ve zemine gölge düşürür
+- Işık yönü sahne genelindedir; nesne seçimine bağlı değildir (ok tuşlarıyla ayarlanır)
 - Sağ fare tuşuyla serbest kamera; WASD ve Q/E hareketi
 - Fare tekerleğiyle kamera hızı, `[` ve `]` ile FOV ayarı
 - Ray üzerinden en yakın nesneyi seçme ve seçim gizmosu
-- Kamera denetimi ve sahne/seçim kodu ayrı bileşenlerde
+- Kamera denetimi, sahne/seçim ve gölge render sistemi ayrı bileşenlerde
 - Güvenli Entity varsayılanları ve idempotent pencere kapatma
 
 ## Gereksinimler
