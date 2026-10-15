@@ -21,14 +21,15 @@ void Engine::Init(int genislik, int yukseklik, const char* baslik) {
     if (!pencereHazir) return;
 
     SetTargetFPS(60);
+    // A failed shader/FBO initialization leaves the viewport usable without shadows.
+    shadowRenderer.Init();
     calisiyorMu = true;
 }
 
 void Engine::Shutdown() {
-    // Window lifetime is independent of the run-loop flag. ESC can stop the
-    // loop before the window is closed; this remains safe when called twice.
     calisiyorMu = false;
     if (pencereHazir) {
+        shadowRenderer.Shutdown();
         if (IsCursorHidden()) EnableCursor();
         CloseWindow();
         pencereHazir = false;
@@ -54,6 +55,15 @@ void Engine::Update() {
     kameraKontrol.AdjustSpeed(GetMouseWheelMove());
     if (IsKeyDown(KEY_LEFT_BRACKET)) kameraKontrol.AdjustFov(-20.0f * dt);
     if (IsKeyDown(KEY_RIGHT_BRACKET)) kameraKontrol.AdjustFov(20.0f * dt);
+
+    // The light is a scene-wide render setting, never tied to entity selection.
+    constexpr float lightStep = 0.65f;
+    Vector2 lightDelta = { 0.0f, 0.0f };
+    if (IsKeyDown(KEY_LEFT)) lightDelta.x -= lightStep*dt;
+    if (IsKeyDown(KEY_RIGHT)) lightDelta.x += lightStep*dt;
+    if (IsKeyDown(KEY_UP)) lightDelta.y -= lightStep*dt;
+    if (IsKeyDown(KEY_DOWN)) lightDelta.y += lightStep*dt;
+    if (lightDelta.x != 0.0f || lightDelta.y != 0.0f) shadowRenderer.AdjustLight(lightDelta);
 
     if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) DisableCursor();
 
@@ -120,16 +130,23 @@ void Engine::Render() {
     const auto& entities = sahne.GetEntities();
     const int selectedIndex = sahne.GetSelectedIndex();
 
+    // Shadow pass must happen before the main framebuffer is drawn.
+    shadowRenderer.RenderShadowMap(entities);
+
     BeginDrawing();
     ClearBackground({ 30, 31, 36, 255 });
 
+    shadowRenderer.BeginMainPass(camera);
     BeginMode3D(camera);
         DrawGrid(24, 1.0f);
         for (std::size_t i = 0; i < entities.size(); ++i) {
+            const Entity& entity = entities[i];
             const bool selected = static_cast<int>(i) == selectedIndex;
-            entities[i].Ciz(selected);
+            shadowRenderer.DrawEntity(entity);
             if (selected) {
-                const Vector3 pos = entities[i].pozisyon;
+                DrawCubeWires(entity.pozisyon, std::fabs(entity.boyut.x),
+                              std::fabs(entity.boyut.y), std::fabs(entity.boyut.z), ORANGE);
+                const Vector3 pos = entity.pozisyon;
                 constexpr float axisLength = 2.5f;
                 DrawLine3D(pos, { pos.x + axisLength, pos.y, pos.z }, RED);
                 DrawSphere({ pos.x + axisLength, pos.y, pos.z }, 0.15f, RED);
@@ -137,14 +154,19 @@ void Engine::Render() {
                 DrawSphere({ pos.x, pos.y + axisLength, pos.z }, 0.15f, GREEN);
                 DrawLine3D(pos, { pos.x, pos.y, pos.z + axisLength }, BLUE);
                 DrawSphere({ pos.x, pos.y, pos.z + axisLength }, 0.15f, BLUE);
+            } else if (entity.cizgiler) {
+                DrawCubeWires(entity.pozisyon, std::fabs(entity.boyut.x),
+                              std::fabs(entity.boyut.y), std::fabs(entity.boyut.z), entity.cizgiRengi);
             }
         }
     EndMode3D();
+    shadowRenderer.EndMainPass();
 
     DrawText("Viento Engine 3D - Viewport", 20, 20, 20, RAYWHITE);
-    DrawText("Fare Sol Tik: Obje Sec | Sag Tik + WASD/QE: Unreal Kamera", 20, 48, 14, LIGHTGRAY);
-    DrawText(TextFormat("Kamera Hizi: %.1fx (Tekerlek ile ayarla) | FOV: %.0f ([ / ] ile ayarla)",
-                        kameraKontrol.GetSpeed(), camera.fovy), 20, 70, 14, YELLOW);
+    DrawText("Sol tik: Obje sec | Sag tik + WASD/QE: Kamera | Ok tuslari: Isik yonu", 20, 48, 14, LIGHTGRAY);
+    DrawText(TextFormat("Kamera Hizi: %.1fx | FOV: %.0f ([ / ] ile ayarla) | Golge: %s",
+                        kameraKontrol.GetSpeed(), camera.fovy,
+                        shadowRenderer.IsReady() ? "Acik" : "Kapali (shader/FBO)"), 20, 70, 14, YELLOW);
 
     if (const Entity* selected = sahne.GetSelectedEntity()) {
         const Vector3 pos = selected->pozisyon;
@@ -152,7 +174,7 @@ void Engine::Render() {
                             selectedIndex, pos.x, pos.y, pos.z),
                  20, ekranYuksekligi - 40, 15, ORANGE);
     } else {
-        DrawText("Secili Obje: Yok (Secmek icin 3D kupe sol tikla)", 20, ekranYuksekligi - 40, 14, DARKGRAY);
+        DrawText("Secili Obje: Yok", 20, ekranYuksekligi - 40, 14, DARKGRAY);
     }
 
     CizSagAltGizmo();
