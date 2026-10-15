@@ -1,6 +1,11 @@
 #include "CameraController.h"
 #include "Entity.h"
 #include "Scene.h"
+#include "raymath.h"
+
+#ifdef NDEBUG
+#undef NDEBUG
+#endif
 
 #include <cassert>
 #include <cmath>
