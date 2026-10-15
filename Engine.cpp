@@ -130,19 +130,32 @@ void Engine::Render() {
     const auto& entities = sahne.GetEntities();
     const int selectedIndex = sahne.GetSelectedIndex();
 
-    // Shadow pass must happen before the main framebuffer is drawn.
+    // Pass 1: populate the depth texture from the light's point of view.
     shadowRenderer.RenderShadowMap(entities);
 
     BeginDrawing();
     ClearBackground({ 30, 31, 36, 255 });
 
-    shadowRenderer.BeginMainPass(camera);
+    // Draw editor-only lines with Raylib's default shader, not the lighting shader.
     BeginMode3D(camera);
         DrawGrid(24, 1.0f);
+    EndMode3D();
+
+    // Pass 2: the same geometry is rendered from the camera and compared with the depth map.
+    shadowRenderer.BeginMainPass(camera);
+    BeginMode3D(camera);
+        shadowRenderer.DrawGround();
+        for (std::size_t i = 0; i < entities.size(); ++i) {
+            shadowRenderer.DrawEntity(entities[i]);
+        }
+    EndMode3D();
+    shadowRenderer.EndMainPass();
+
+    // Editor overlays use Raylib's default shader and never affect the shadow map.
+    BeginMode3D(camera);
         for (std::size_t i = 0; i < entities.size(); ++i) {
             const Entity& entity = entities[i];
             const bool selected = static_cast<int>(i) == selectedIndex;
-            shadowRenderer.DrawEntity(entity);
             if (selected) {
                 DrawCubeWires(entity.pozisyon, std::fabs(entity.boyut.x),
                               std::fabs(entity.boyut.y), std::fabs(entity.boyut.z), ORANGE);
@@ -160,7 +173,6 @@ void Engine::Render() {
             }
         }
     EndMode3D();
-    shadowRenderer.EndMainPass();
 
     DrawText("Viento Engine 3D - Viewport", 20, 20, 20, RAYWHITE);
     DrawText("Sol tik: Obje sec | Sag tik + WASD/QE: Kamera | Ok tuslari: Isik yonu", 20, 48, 14, LIGHTGRAY);
